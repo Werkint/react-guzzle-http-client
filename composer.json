@@ -1,5 +1,8 @@
 {
-    "name": "wyrihaximus/react-guzzle-http-client",
+    "name": "werkint/react-guzzle-http-client",
+    "replace": {
+        "wyrihaximus/react-guzzle-http-client": "3.0.3"
+    },
     "description": "Asyncronous GuzzleRing adapter powered by react/http-client",
     "license": "MIT",
     "authors": [

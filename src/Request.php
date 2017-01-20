@@ -167,13 +167,33 @@ class Request
             $request = $this->setupRequest();
             $this->setupListeners($request);
 
-            $body = $this->request->getBody()->getContents();
-
-            $this->progress->onSending($body);
+            $body = $this->request->getBody();
 
             $this->setConnectionTimeout($request);
-            $request->end($body);
-            $this->setRequestTimeout($request);
+
+            $prev = 0;
+            $tick = function () use (&$prev, &$tick, $body, $request) {
+                if ($request->isWritable()) {
+                    $ready = $request->write('');
+                    if ($ready && $data = $body->read(1024 * 1024 * 5)) {
+                        $ready = $request->write($data);
+                    }
+                }
+
+                if (!isset($ready) || $body->eof()) {
+                    $body->close();
+                    $request->end();
+                } else {
+                    if ($ready && isset($data)) {
+                        $prev = max(0, $prev - 0.1);
+                        $this->loop->futureTick($tick);
+                    } else {
+                        //$this->setRequestTimeout($request); TODO: uncomment
+                        $this->loop->addTimer($prev += 0.1, $tick); // Limiting write rate
+                    }
+                }
+            };
+            $this->loop->futureTick($tick);
         });
     }
 
@@ -387,23 +407,23 @@ class Request
             'loop' => $this->loop,
         ]);
     }
-    
+
     private function applyOptions(array $options = [])
     {
         $this->options = array_replace_recursive($this->defaultOptions, $options);
-        
+
         // provides backwards compatibility for Guzzle 3-5.
         if (isset($this->options['client'])) {
             $this->options = array_merge($this->options, $this->options['client']);
             unset($this->options['client']);
         }
-        
+
         // provides for backwards compatibility for Guzzle 3-5
         if (isset($this->options['save_to'])) {
             $this->options['sink'] = $options['save_to'];
             unset($this->options['save_to']);
         }
-        
+
         if (isset($this->options['progress']) && is_callable($this->options['progress'])) {
             $this->progress = new Progress($this->options['progress']);
         } else {
